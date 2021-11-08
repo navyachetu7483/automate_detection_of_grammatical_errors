@@ -1,0 +1,418 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Automate detection .ipynb",
+      "provenance": [],
+      "collapsed_sections": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 609
+        },
+        "id": "VpqvakLEs7Nu",
+        "outputId": "cb694e3d-588b-4c52-967d-6988727329a4"
+      },
+      "source": [
+        "import spacy \n",
+        "from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS as stopwords \n",
+        "from sklearn.feature_extraction.text import CountVectorizer \n",
+        "from sklearn.metrics import accuracy_score \n",
+        "from sklearn.base import TransformerMixin \n",
+        "from sklearn.pipeline import Pipeline\n",
+        "from sklearn.svm import LinearSVC\n",
+        "from sklearn.metrics import confusion_matrix \n",
+        "from sklearn.metrics import classification_report \n",
+        "import string\n",
+        "import matplotlib.pyplot as plt\n",
+        "fig = plt.figure()\n",
+        "import collections, numpy\n",
+        "punctuations = string.punctuation\n",
+        "!python3 -m spacy download en\n",
+        "spacy.load('en_core_web_sm')\n",
+        "from spacy.lang.en import English\n",
+        "parser = English()\n",
+        "import pandas as pd\n",
+        "import random\n",
+        "import inflect\n",
+        "p = inflect.engine()"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "/usr/local/lib/python3.7/dist-packages/sklearn/utils/deprecation.py:144: FutureWarning: The sklearn.feature_extraction.stop_words module is  deprecated in version 0.22 and will be removed in version 0.24. The corresponding classes / functions should instead be imported from sklearn.feature_extraction.text. Anything that cannot be imported from sklearn.feature_extraction.text is now part of the private API.\n",
+            "  warnings.warn(message, FutureWarning)\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Collecting en_core_web_sm==2.2.5\n",
+            "  Downloading https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.2.5/en_core_web_sm-2.2.5.tar.gz (12.0 MB)\n",
+            "\u001b[K     |████████████████████████████████| 12.0 MB 8.1 MB/s \n",
+            "\u001b[?25hRequirement already satisfied: spacy>=2.2.2 in /usr/local/lib/python3.7/dist-packages (from en_core_web_sm==2.2.5) (2.2.4)\n",
+            "Requirement already satisfied: numpy>=1.15.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (1.19.5)\n",
+            "Requirement already satisfied: catalogue<1.1.0,>=0.0.7 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (1.0.0)\n",
+            "Requirement already satisfied: setuptools in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (57.4.0)\n",
+            "Requirement already satisfied: srsly<1.1.0,>=1.0.2 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (1.0.5)\n",
+            "Requirement already satisfied: blis<0.5.0,>=0.4.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (0.4.1)\n",
+            "Requirement already satisfied: tqdm<5.0.0,>=4.38.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (4.62.3)\n",
+            "Requirement already satisfied: thinc==7.4.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (7.4.0)\n",
+            "Requirement already satisfied: requests<3.0.0,>=2.13.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (2.23.0)\n",
+            "Requirement already satisfied: cymem<2.1.0,>=2.0.2 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (2.0.5)\n",
+            "Requirement already satisfied: plac<1.2.0,>=0.9.6 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (1.1.3)\n",
+            "Requirement already satisfied: preshed<3.1.0,>=3.0.2 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (3.0.5)\n",
+            "Requirement already satisfied: murmurhash<1.1.0,>=0.28.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (1.0.5)\n",
+            "Requirement already satisfied: wasabi<1.1.0,>=0.4.0 in /usr/local/lib/python3.7/dist-packages (from spacy>=2.2.2->en_core_web_sm==2.2.5) (0.8.2)\n",
+            "Requirement already satisfied: importlib-metadata>=0.20 in /usr/local/lib/python3.7/dist-packages (from catalogue<1.1.0,>=0.0.7->spacy>=2.2.2->en_core_web_sm==2.2.5) (4.8.1)\n",
+            "Requirement already satisfied: zipp>=0.5 in /usr/local/lib/python3.7/dist-packages (from importlib-metadata>=0.20->catalogue<1.1.0,>=0.0.7->spacy>=2.2.2->en_core_web_sm==2.2.5) (3.6.0)\n",
+            "Requirement already satisfied: typing-extensions>=3.6.4 in /usr/local/lib/python3.7/dist-packages (from importlib-metadata>=0.20->catalogue<1.1.0,>=0.0.7->spacy>=2.2.2->en_core_web_sm==2.2.5) (3.7.4.3)\n",
+            "Requirement already satisfied: chardet<4,>=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests<3.0.0,>=2.13.0->spacy>=2.2.2->en_core_web_sm==2.2.5) (3.0.4)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests<3.0.0,>=2.13.0->spacy>=2.2.2->en_core_web_sm==2.2.5) (2021.5.30)\n",
+            "Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,<1.26,>=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests<3.0.0,>=2.13.0->spacy>=2.2.2->en_core_web_sm==2.2.5) (1.24.3)\n",
+            "Requirement already satisfied: idna<3,>=2.5 in /usr/local/lib/python3.7/dist-packages (from requests<3.0.0,>=2.13.0->spacy>=2.2.2->en_core_web_sm==2.2.5) (2.10)\n",
+            "\u001b[38;5;2m✔ Download and installation successful\u001b[0m\n",
+            "You can now load the model via spacy.load('en_core_web_sm')\n",
+            "\u001b[38;5;2m✔ Linking successful\u001b[0m\n",
+            "/usr/local/lib/python3.7/dist-packages/en_core_web_sm -->\n",
+            "/usr/local/lib/python3.7/dist-packages/spacy/data/en\n",
+            "You can now load the model via spacy.load('en')\n"
+          ]
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 432x288 with 0 Axes>"
+            ]
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "l7PPcBvutXTJ"
+      },
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "EwTG3KGwtidf"
+      },
+      "source": [
+        "def datapreprocessing(url):\n",
+        "\n",
+        "  # Load the dataset into a pandas dataframe.\n",
+        "  df = pd.read_csv(url, delimiter='\\t', header=None, names=['sentence_source', 'label', 'label_notes', 'sentence'])\n",
+        "\n",
+        "  sentences = df.sentence.values\n",
+        "  labels1 = df.label.values\n",
+        "  # correct=labels.count(1)\n",
+        "  \n",
+        "  train=[]\n",
+        "  actual_label=[]\n",
+        "  for i in range(len(df)):\n",
+        "    train.append((df.sentence[i],df.label[i]))\n",
+        "    actual_label.append(df.label[i])\n",
+        "  random.shuffle(train)\n",
+        "\n",
+        "  train_data = train[:7000]\n",
+        "  test_data = train[7000:]\n",
+        "  actual_labels=actual_label[7000:]  \n",
+        "  return train_data,test_data,actual_labels,labels1"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "GxkipJOCt50R"
+      },
+      "source": [
+        "train_data,test_data,labels,cor=datapreprocessing('/in_domain_train.tsv')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "04Pph5Kvt62G"
+      },
+      "source": [
+        "collections.Counter(labels)"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "MMPes1AnuBH_"
+      },
+      "source": [
+        "\n",
+        "fig = plt.figure()\n",
+        "ax = fig.add_axes([0,0,1,1])\n",
+        "classes = ['Grammatically Correct','Grammetically Incorret']\n",
+        "students = [1100,451]\n",
+        "ax.bar(classes,students)\n",
+        "plt.show()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Twu919Tjuc_7"
+      },
+      "source": [
+        "def model():\n",
+        "  #Custom transformer using spaCy \n",
+        "  class predictors(TransformerMixin):\n",
+        "      def transform(self, X, **transform_params):\n",
+        "          return [clean_text(text) for text in X]\n",
+        "      def fit(self, X, y=None, **fit_params):\n",
+        "          return self\n",
+        "      def get_params(self, deep=True):\n",
+        "          return {}\n",
+        "\n",
+        "  # Basic utility function to clean the text \n",
+        "  def clean_text(text):     \n",
+        "      return text.strip()\n",
+        "  def spacy_tokenizer(sentence):\n",
+        "      tokens = parser(sentence)\n",
+        "      tokens = [ tok for tok in tokens]\n",
+        "      return tokens\n",
+        "\n",
+        "  #create vectorizer object to generate feature vectors, we will use custom spacy tokenizer\n",
+        "  vectorizer = CountVectorizer(tokenizer = spacy_tokenizer, ngram_range=(1,1)) \n",
+        "  classifier = LinearSVC()\n",
+        "\n",
+        "  # Create the  pipeline to clean, tokenize, vectorize, and classify \n",
+        "  pipe = Pipeline([(\"cleaner\", predictors()),('vectorizer', vectorizer),('classifier', classifier)])\n",
+        "  \n",
+        "  return pipe"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "TTshI0-yu7Sp"
+      },
+      "source": [
+        "def detection(sen):\n",
+        "  pipe=model()\n",
+        "  pipe.fit([x[0] for x in train_data], [x[1] for x in train_data]) \n",
+        "  pred_data = pipe.predict(sen) \n",
+        "  result=pred_data[0]\n",
+        "  return result"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "VLVh_DVqvBWl"
+      },
+      "source": [
+        "pipe=model()\n",
+        "def accuracy(test_data,actual_label):\n",
+        "  pipe.fit([x[0] for x in train_data], [x[1] for x in train_data])\n",
+        "  pred_data = pipe.predict([x[0] for x in test_data])\n",
+        "  print ('Accuracy Score :',accuracy_score(labels, pred_data) )\n",
+        "  \n",
+        "  print ('Report : ')\n",
+        "  print (classification_report(labels, pred_data) )"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "OwF---cnvIzv"
+      },
+      "source": [
+        "def punct_data(sen):\n",
+        "  # Load the dataset into a pandas dataframe.\n",
+        "  df = pd.read_csv('/punct.csv')\n",
+        "  \n",
+        "  sentences = df.sentence.values\n",
+        "  labels = df.lables.values\n",
+        "  train=[]\n",
+        "  for i in range(len(df)):\n",
+        "    train.append((df.sentence[i],df.lables[i]))\n",
+        "  \n",
+        "  random.shuffle(train)\n",
+        "\n",
+        "  train_data = train[:200]\n",
+        "  test_data = train[200:]  \n",
+        "  class predictors(TransformerMixin):\n",
+        "      def transform(self, X, **transform_params):\n",
+        "          return [clean_text(text) for text in X]\n",
+        "      def fit(self, X, y=None, **fit_params):\n",
+        "          return self\n",
+        "      def get_params(self, deep=True):\n",
+        "          return {}\n",
+        "  def clean_text(text):     \n",
+        "      return text.strip().lower()\n",
+        "  def spacy_tokenizer(sentence):\n",
+        "      tokens = parser(sentence)\n",
+        "      tokens = [ tok.lower_ for tok in tokens]\n",
+        "      return tokens\n",
+        "\n",
+        "  #create vectorizer object to generate feature vectors, we will use custom spacy tokenizer\n",
+        "  vectorizer = CountVectorizer(tokenizer = spacy_tokenizer, ngram_range=(1,1)) \n",
+        "  classifier = LinearSVC()\n",
+        "\n",
+        "  # Create the  pipeline to clean, tokenize, vectorize, and classify \n",
+        "  pipe = Pipeline([(\"cleaner\", predictors()),('vectorizer', vectorizer),('classifier', classifier)])\n",
+        "  pipe.fit([x[0] for x in train_data], [x[1] for x in train_data]) \n",
+        "  pred_data = pipe.predict(sen) \n",
+        "  result=pred_data[0]\n",
+        "  print(result)\n",
+        "  return result"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "cuksuc1MvsMF"
+      },
+      "source": [
+        "import spacy.cli\n",
+        "spacy.cli.download(\"en_core_web_lg\")"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "vLS19b4Fvwr-"
+      },
+      "source": [
+        "def article(sen):\n",
+        "  import nltk\n",
+        "  import en_core_web_lg\n",
+        "  nlp = en_core_web_lg.load()\n",
+        "  doc = nlp(sen)\n",
+        "  art_word=[]\n",
+        "  art=[]\n",
+        "  fl=0\n",
+        "  article=['a','an']\n",
+        "  for i,word in enumerate(doc):\n",
+        "    if(fl==1):\n",
+        "      art_word.append(word)\n",
+        "      fl=0\n",
+        "    st=str(word)\n",
+        "    if st in article:\n",
+        "      art.append(st)\n",
+        "      fl=1\n",
+        "      pass\n",
+        "  for i,word in enumerate(art_word):\n",
+        "    st=str(word)\n",
+        "    q=p.a(st)\n",
+        "    if((art[i]+\" \"+st)==q):\n",
+        "      return 1\n",
+        "    else:\n",
+        "      return 0"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "kKruLM94v2Do"
+      },
+      "source": [
+        "def capital(sen):\n",
+        "  if sen[0].islower():\n",
+        "    print(\"Incorrect Capitalization\")"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "UHeioa5kv7ew"
+      },
+      "source": [
+        "def check(sen):\n",
+        "  result=detection(sen)\n",
+        "  if result==1:\n",
+        "    print(\"Sentence is Grammetically Correct\")\n",
+        "  else:\n",
+        "    print(\"Sentence is Grammetically Incorrect\")\n",
+        "    punct=punctuation(sen)  \n",
+        "    if punct==0:\n",
+        "      print(\"Incorrect Punctuations\")\n",
+        "    art=article(sen)  \n",
+        "    if art==0:\n",
+        "        print(\"Incorrect Article(a/an)\")  \n",
+        "    capital(sen)"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "I1kcnQ3iwAVD"
+      },
+      "source": [
+        "sen=[]\n",
+        "sen.append(input(\"Enter Sentence\"))\n",
+        "check(sen[0])"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "dkeUqaCAwI9q"
+      },
+      "source": [
+        "accuracy(test_data,labels)"
+      ],
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
